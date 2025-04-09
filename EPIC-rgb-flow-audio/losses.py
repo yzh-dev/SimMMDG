@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-
+# 这个损失函数的核心思想是让同类样本在特征空间中聚集，不同类样本分散，从而学习到更有判别性的特征表示。在多模态学习中，它可以帮助不同模态的特征更好地对齐和融合。
 class SupConLoss(nn.Module):
     """Supervised Contrastive Learning: https://arxiv.org/pdf/2004.11362.pdf.
     It also supports the unsupervised contrastive loss in SimCLR"""

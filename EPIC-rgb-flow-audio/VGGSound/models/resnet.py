@@ -54,7 +54,7 @@ class BasicBlock(nn.Module):
 
         return out
 
-
+# AudioAttGenModule 是一个自定义的音频注意力生成模块，它的主要作用是处理音频特征并生成注意力权重
 class AudioAttGenModule(nn.Module):
 
     def __init__(self, block=BasicBlock, layers=[2,2,2,2], num_classes=1000, pool='avgpool', zero_init_residual=False,

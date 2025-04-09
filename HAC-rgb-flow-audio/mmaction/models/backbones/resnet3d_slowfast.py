@@ -544,7 +544,7 @@ class ResNet3dSlowFast(nn.Module):
             x_slow = torch.cat((x_slow, x_fast_lateral), dim=1)
 
         for i, layer_name in enumerate(self.slow_path.res_layers):
-            if i==3:
+            if i==3:  # 这个方法只处理到第三个残差层（不包括第四个残差层）。这意味着 get_feature 方法没有使用 layer4，而是在 layer3 之后就停止了处理
                 break
             res_layer = getattr(self.slow_path, layer_name)
             x_slow = res_layer(x_slow)
@@ -565,7 +565,7 @@ class ResNet3dSlowFast(nn.Module):
     def get_predict(self, x):
         x_slow = x[0]
         x_fast = x[1]
-
+        # 在get_predict函数中才会使用到layer4
         res_layer = getattr(self.slow_path, 'layer4')
         x_slow = res_layer(x_slow)
         res_layer_fast = getattr(self.fast_path, 'layer4')

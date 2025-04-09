@@ -34,7 +34,7 @@ class EPICDOMAIN(torch.utils.data.Dataset):
 
         data1 = []
         for dom in domain:
-            train_file = pd.read_pickle(self.base_path + 'MM-SADA_Domain_Adaptation_Splits/'+dom+"_"+split+".pkl")
+            train_file = pd.read_pickle(self.base_path + '/MM-SADA_Domain_Adaptation_Splits/'+dom+"_"+split+".pkl")
 
             for _, line in train_file.iterrows():
                 image = [dom + '/' + line['video_id'], line['start_frame'], line['stop_frame'], line['start_timestamp'],
@@ -47,11 +47,11 @@ class EPICDOMAIN(torch.utils.data.Dataset):
         self.cfg_flow = cfg_flow
 
     def __getitem__(self, index):
-        video_path = self.base_path +'rgb/'+self.split + '/'+self.samples[index][0]
-        flow_path = self.base_path +'flow/'+self.split + '/'+self.samples[index][0]
+        video_path = self.base_path +'/rgb/'+self.split + '/'+self.samples[index][0]
+        flow_path = self.base_path +'/flow/'+self.split + '/'+self.samples[index][0]
 
         if self.use_video:
-            filename_tmpl = self.cfg.data.train.get('filename_tmpl', 'frame_{:010}.jpg')
+            filename_tmpl = self.cfg.data.train.get('filename_tmpl', 'frame_{:010}.jpg') # 如果在配置中找到了 'filename_tmpl' 这个键，就返回其对应的值；如果没有找到，就返回默认值 'frame_{:010}.jpg'。
             modality = self.cfg.data.train.get('modality', 'RGB')
             start_index = self.cfg.data.train.get('start_index', int(self.samples[index][1]))
             data = dict(
@@ -81,7 +81,7 @@ class EPICDOMAIN(torch.utils.data.Dataset):
         label1 = self.samples[index][-1]
 
         if self.use_audio:
-            audio_path = self.base_path + 'rgb/' + self.split + '/' + self.samples[index][0] + '.wav'
+            audio_path = self.base_path + '/audio/' + self.split + '/' + self.samples[index][0] + '.wav'
             samples, samplerate = sf.read(audio_path)
 
             duration = len(samples) / samplerate

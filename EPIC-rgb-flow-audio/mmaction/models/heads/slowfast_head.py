@@ -87,10 +87,10 @@ class SlowFastHead(BaseHead):
         # [N x C]
         x = x.view(x.size(0), -1)
 
-        if self.reduce_channel:
+        if self.reduce_channel:  # 默认不进行通道减少
             x = self.fc_reduce(x)
 
         # [N x num_classes]
-        cls_score = self.fc_cls(x)
+        cls_score = self.fc_cls(x)  # 前向过程
 
         return cls_score, x

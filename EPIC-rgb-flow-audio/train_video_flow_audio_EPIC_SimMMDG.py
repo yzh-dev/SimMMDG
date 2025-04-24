@@ -12,6 +12,8 @@ from VGGSound.test import get_arguments
 from dataloader_video_flow_audio_EPIC_SimMMDG import EPICDOMAIN
 import torch.nn.functional as F
 from losses import SupConLoss
+import wandb
+wandb.login(key="")
 # 需要进一步debug观察形状变化
 def train_one_step(clip, labels, flow, spectrogram):
     labels = labels.cuda()
@@ -366,6 +368,15 @@ if __name__ == '__main__':
     log_name = log_name + args.appen
     log_path = base_path + log_name + '.csv'
     print(log_path)
+
+    run = wandb.init(
+        project="SimMMDG",    # Specify your project
+        config={                         # Track hyperparameters and metadata
+            "learning_rate": args.lr,
+            "epochs": args.nepochs,
+        },
+    )
+
     # 交叉熵损失
     criterion = nn.CrossEntropyLoss() 
     criterion = criterion.cuda()
@@ -516,6 +527,13 @@ if __name__ == '__main__':
                             "Average loss: {:.4f}, Current loss: {:.4f}, Accuracy: {:.4f}".format(total_loss / float(count),
                                                                                                   loss.item(),
                                                                                                   acc / float(count)))
+                        if split=='train':
+                            wandb.log({"train loss": loss.item(), "train Acc": acc / float(count)})
+                        elif split=='val':
+                            wandb.log({"val loss": loss.item(), "val Acc": acc / float(count)})
+                        elif split=='test':
+                            wandb.log({"test loss": loss.item(), "test Acc": acc / float(count)})
+
                         pbar.update()
                     # 验证时，更新bestacc，bestloss，bestepoch
                     if split == 'val':

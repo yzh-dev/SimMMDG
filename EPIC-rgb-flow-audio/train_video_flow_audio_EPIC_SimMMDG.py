@@ -240,27 +240,20 @@ if __name__ == '__main__':
 
     parser.add_argument('-s','--source_domain', nargs='+', help='<Required> Set source_domain', required=True)
     parser.add_argument('-t','--target_domain', nargs='+', help='<Required> Set target_domain', required=True)
-    parser.add_argument('--datapath', type=str, default='/path/to/EPIC-KITCHENS/',
-                        help='datapath')
-    parser.add_argument('--lr', type=float, default=1e-4,
-                        help='lr')
-    parser.add_argument('--bsz', type=int, default=16,
-                        help='batch_size')
+    parser.add_argument('--datapath', type=str, default='/path/to/EPIC-KITCHENS/', help='datapath')
+    parser.add_argument('--lr', type=float, default=1e-4, help='lr')
+    parser.add_argument('--bsz', type=int, default=16, help='batch_size')
     parser.add_argument("--nepochs", type=int, default=15)
     parser.add_argument('--save_checkpoint', action='store_true')
     parser.add_argument('--save_best', action='store_true')
-    parser.add_argument('--alpha_trans', type=float, default=0.1,
-                        help='alpha_trans')
+    parser.add_argument('--alpha_trans', type=float, default=0.1, help='alpha_trans')
     parser.add_argument("--trans_hidden_num", type=int, default=2048)
     parser.add_argument("--hidden_dim", type=int, default=2048)
     parser.add_argument("--out_dim", type=int, default=128)
-    parser.add_argument('--temp', type=float, default=0.1,
-                        help='temp')
-    parser.add_argument('--alpha_contrast', type=float, default=3.0,
-                        help='alpha_contrast')
+    parser.add_argument('--temp', type=float, default=0.1, help='temp')
+    parser.add_argument('--alpha_contrast', type=float, default=3.0, help='alpha_contrast')
     parser.add_argument('--resumef', action='store_true')
-    parser.add_argument('--explore_loss_coeff', type=float, default=0.7,
-                        help='explore_loss_coeff')
+    parser.add_argument('--explore_loss_coeff', type=float, default=0.7, help='explore_loss_coeff')#alpha_dis
     parser.add_argument("--BestEpoch", type=int, default=0)
     parser.add_argument('--BestAcc', type=float, default=0, help='BestAcc')
     parser.add_argument('--BestTestAcc', type=float, default=0, help='BestTestAcc')
@@ -524,15 +517,15 @@ if __name__ == '__main__':
                                                                                                   loss.item(),
                                                                                                   acc / float(count)))
                         pbar.update()
-
+                    # 验证时，更新bestacc，bestloss，bestepoch
                     if split == 'val':
                         currentvalAcc = acc / float(count)
                         if currentvalAcc >= BestAcc:  # 在验证集的时候进行计算
                             BestLoss = total_loss / float(count)
                             BestEpoch = epoch_i
                             BestAcc = acc / float(count)  # 更新验证集上的最佳准确率
-                            
-
+                            # 验证时，输出当前epoch，loss，acc，bestepoch，bestloss，bestvalacc
+                    # 其实这里应该只有验证集效果更好时，才需要去更新测试集上的最好结果，而不应该在每个epoch都计算并输出test上的结果。
                     if split == 'test':
                         currenttestAcc = acc / float(count)
                         if currentvalAcc >= BestAcc:  # 如果验证集上有改进，同步更新测试集上的最佳准确率
@@ -616,7 +609,7 @@ if __name__ == '__main__':
                                 save['mlp_a2f_state_dict'] = mlp_a2f.state_dict()
 
                             torch.save(save, base_path_model + log_name + '.pt')
-                        
+                    # train val test都输出loss和acc    
                     f.write("{},{},{},{}\n".format(epoch_i, split, total_loss / float(count), acc / float(count)))
                     f.flush()
 
@@ -624,7 +617,7 @@ if __name__ == '__main__':
                     print("{},{},{}\n".format(epoch_i, split, acc / float(count)))
                     print('BestValAcc ', BestAcc)
                     print('BestTestAcc ', BestTestAcc)
-                    
+                    #test时输出当前epoch，loss，acc，bestepoch，bestloss，bestvalacc，besttestacc
                     if split == 'test':
                         f.write("CurrentBestEpoch,{},BestLoss,{},BestValAcc,{},BestTestAcc,{} \n".format(BestEpoch, BestLoss, BestAcc, BestTestAcc))
                         f.flush()

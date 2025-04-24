@@ -1,0 +1,39 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "RunCurrentFile",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "EPIC-rgb-flow-audio调试",
+            // "type": "python",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/EPIC-rgb-flow-audio",
+            "args": [
+                "--use_video",
+                "--use_flow",
+                "--use_audio",
+                "-s",
+                "D2",
+                "D3",
+                "-t",
+                "D1",
+                "--lr",
+                "1e-4",
+                "--bsz",
+                "16",
+                "--nepochs",
+                "15",
+                "--datapath",
+                "D:/ML/Dataset/EPIC_KITCHENS",
+            ]
+        }
+    ]
+}

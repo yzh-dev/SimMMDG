@@ -59,6 +59,7 @@ def train_one_step(clip, labels, flow, spectrogram):
     predict = mlp_cls(feat)  # 输入包括所有模态的特征，输出为8个类别的预测概率，输入形状为[batch_size, 2304+2048+512]，输出形状为[batch_size, 8]
     # 当 train_one_step 函数在 main 函数内被调用时，它形成了一个闭包。闭包可以访问其定义环境中的变量，包括外部函数的局部变量
     loss = criterion(predict, labels)  # 分类损失
+    wandb.log({"cls loss": loss.item()})
 
     # Cross-modal Translation 首先计算跨模态转换损失，用到了模态专用特征+模态共享特征
     if args.use_video and args.use_flow and args.use_audio:
@@ -81,6 +82,7 @@ def train_one_step(clip, labels, flow, spectrogram):
         f2v_loss = torch.mean(torch.norm(v_emd_t2-v_emd/torch.norm(v_emd, dim=1, keepdim=True), dim=1))
         a2f_loss = torch.mean(torch.norm(f_emd_t2-f_emd/torch.norm(f_emd, dim=1, keepdim=True), dim=1))
         loss = loss + args.alpha_trans*(v2a_loss + a2v_loss+ v2f_loss+ f2a_loss+ f2v_loss+ a2f_loss)/6
+        wandb.log({"v2a_loss": v2a_loss.item(), "a2v_loss": a2v_loss.item(), "v2f_loss": v2f_loss.item(), "f2a_loss": f2a_loss.item(), "f2v_loss": f2v_loss.item(), "a2f_loss": a2f_loss.item()})
     elif args.use_video and args.use_flow:
         f_emd_t = mlp_v2f(v_emd)
         v_emd_t2 = mlp_f2v(f_emd)
@@ -127,6 +129,7 @@ def train_one_step(clip, labels, flow, spectrogram):
     # 这里的 batch_size 取决于你在训练时设置的批量大小（通常通过 args.bsz 指定）。
     # 需要注意的是，SupConLoss 期望的输入形状是 [bsz, n_views, ...]，其中 n_views 在这里是2，对应于视频、光流、音频3种模态。这种设计允许损失函数在不同模态的特征表示之间进行对比学习
     loss_contrast = criterion_contrast(emd_proj, labels) #
+    wandb.log({"contrast loss": loss_contrast.item()})
     loss = loss + args.alpha_contrast*loss_contrast
   
     # Feature Splitting with Distance
@@ -141,7 +144,7 @@ def train_one_step(clip, labels, flow, spectrogram):
     if args.use_flow:
         loss_e = loss_e - F.mse_loss(f_emd[:, :f_dim], f_emd[:, f_dim:])
         num_loss = num_loss + 1
-    
+    wandb.log({"distance loss": (loss_e/num_loss).item()})
     loss = loss + args.explore_loss_coeff * loss_e/num_loss
 
     optim.zero_grad()

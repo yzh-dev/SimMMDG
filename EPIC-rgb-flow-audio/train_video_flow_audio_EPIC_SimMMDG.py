@@ -56,6 +56,7 @@ def train_one_step(clip, labels, flow, spectrogram):
     elif args.use_flow and args.use_audio:
         feat = torch.cat((f_emd, audio_emd), dim=1)
 
+    feat = fusion_module(v_emd, audio_emd, f_emd)
     predict = mlp_cls(feat)  # 输入包括所有模态的特征，输出为8个类别的预测概率，输入形状为[batch_size, 2304+2048+512]，输出形状为[batch_size, 8]
     # 当 train_one_step 函数在 main 函数内被调用时，它形成了一个闭包。闭包可以访问其定义环境中的变量，包括外部函数的局部变量
     loss = criterion(predict, labels)  # 分类损失
@@ -149,7 +150,11 @@ def train_one_step(clip, labels, flow, spectrogram):
 
     optim.zero_grad()
     loss.backward()
+    # 添加梯度裁剪，防止梯度爆炸
+    torch.nn.utils.clip_grad_norm_(params, max_norm=10.0)
     optim.step()
+    # 更新学习率，不知对性能会有什么影响，需要进一步测试
+    # scheduler.step()
     return predict, loss
 
 def validate_one_step(clip, labels, flow, spectrogram):
@@ -203,6 +208,29 @@ class Encoder(nn.Module):
         
     def forward(self, feat):
         return self.enc_net(feat)
+
+# 可以考虑添加注意力机制：
+class MultiModalAttentionFusion(nn.Module):
+    def __init__(self, v_dim, a_dim, f_dim):
+        super().__init__()
+        self.attention = nn.Sequential(
+            nn.Linear(v_dim + a_dim + f_dim, 3),
+            nn.Softmax(dim=1)
+        )
+        # 添加投影层使维度匹配
+        self.proj = nn.Linear(v_dim + a_dim + f_dim, v_dim + a_dim + f_dim)
+        
+    def forward(self, v_emd, audio_emd, f_emd):
+        # 原始特征拼接
+        residual_feat = torch.cat((v_emd, audio_emd, f_emd), dim=1)
+        
+        # 注意力加权
+        weights = self.attention(residual_feat)#torch.Size([16, 3])
+        weighted_feat = torch.cat((weights[:, 0:1] * v_emd , weights[:, 1:2] * audio_emd , weights[:, 2:3] * f_emd), dim=1)
+                       
+        # 残差连接：原始特征 + 注意力特征
+        output = residual_feat + weighted_feat
+        return output
 
 # 模态转换的作用，帮助不同模态之间的特征对其和信息交互
 class EncoderTrans(nn.Module):
@@ -333,6 +361,8 @@ if __name__ == '__main__':
         input_dim = input_dim + 512
     # 分类器，输入维度为所有隐藏层（含模态共享、模态专有维度）
     # The EPIC-Kitchens dataset includes eight actions (‘put’,‘take’, ‘open’, ‘close’, ‘wash’, ‘cut’, ‘mix’, and ‘pour’)
+    fusion_module = MultiModalAttentionFusion(v_dim=2304, a_dim=512, f_dim=2048)
+    fusion_module = fusion_module.cuda()
     mlp_cls = Encoder(input_dim=input_dim, out_dim=8)  # 单独搭建的预测头，2层MLP
     mlp_cls = mlp_cls.cuda()
 
@@ -374,9 +404,23 @@ if __name__ == '__main__':
 
     run = wandb.init(
         project="SimMMDG",    # Specify your project
+        name=args.appen,
         config={                         # Track hyperparameters and metadata
             "learning_rate": args.lr,
+            "bsz": args.bsz,
             "epochs": args.nepochs,
+            "source_domain": args.source_domain,
+            "target_domain": args.target_domain,
+            "use_video": args.use_video,
+            "use_flow": args.use_flow,
+            "use_audio": args.use_audio,
+            "alpha_trans": args.alpha_trans,
+            "alpha_contrast": args.alpha_contrast,
+            "alpha_dis": args.explore_loss_coeff,
+            "trans_hidden_num": args.trans_hidden_num,
+            "hidden_dim": args.hidden_dim,
+            "out_dim": args.out_dim,
+            "temp": args.temp,
         },
     )
 
@@ -389,7 +433,8 @@ if __name__ == '__main__':
     criterion_contrast = criterion_contrast.cuda()
     # ------------------------------------------------------------------------------------------------------------
     # 需要训练的参数
-    params = list(mlp_cls.parameters())
+    # params = list(mlp_cls.parameters()) 
+    params = list(mlp_cls.parameters()) + list(fusion_module.parameters())
     if args.use_video:
         # SlowFast网络包含两个路径：
         # Slow路径：捕获空间语义信息
@@ -415,6 +460,8 @@ if __name__ == '__main__':
         params = params + list(mlp_f2a.parameters())+list(mlp_a2f.parameters())
 
     optim = torch.optim.Adam(params, lr=args.lr, weight_decay=1e-4)
+    # 当前项目中未采用学习率调整策略，可以考虑添加
+    # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optim, T_max=args.nepochs)
     
     BestLoss = float("inf")
     BestEpoch = args.BestEpoch
@@ -527,11 +574,9 @@ if __name__ == '__main__':
                         acc += int(acc1)
                         count += predict1.size()[0]
                         pbar.set_postfix_str(
-                            "Average loss: {:.4f}, Current loss: {:.4f}, Accuracy: {:.4f}".format(total_loss / float(count),
-                                                                                                  loss.item(),
-                                                                                                  acc / float(count)))
+                            "Average loss: {:.4f}, Current loss: {:.4f}, Accuracy: {:.4f}".format(total_loss / float(count), loss.item(), acc / float(count)))
                         if split=='train':
-                            wandb.log({"train loss": loss.item(), "train Acc": acc / float(count)})
+                            wandb.log({"train loss": loss.item(), "train Acc": acc / float(count)})#acc / float(count)：当前epoch的平均准确率
                         elif split=='val':
                             wandb.log({"val loss": loss.item(), "val Acc": acc / float(count)})
                         elif split=='test':

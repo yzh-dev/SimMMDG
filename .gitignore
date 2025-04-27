@@ -5,3 +5,4 @@ __pycache__/
 *$py.class
 wandb/
 /EPIC-rgb-flow-audio/checkpoints/
+/EPIC-rgb-flow-audio/checkpoints

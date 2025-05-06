@@ -41,7 +41,9 @@ class EPICDOMAIN(torch.utils.data.Dataset):
                         line['stop_timestamp']]
                 labels = line['verb_class']
                 data1.append((image[0], image[1], image[2], image[3], image[4], int(labels)))
-                
+
+        # 可以将__getitem__中预处理音频的部分挪到这里
+
         self.samples = data1
         self.cfg = cfg
         self.cfg_flow = cfg_flow

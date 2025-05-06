@@ -138,43 +138,45 @@ def train_one_step(clip, labels, flow, spectrogram):
 
     # Feature Splitting with Distance，利用L2距离计算模态专有特征和模态共享特征之间的距离
     # 这个损失的不好在于，总是会使得损失越来越小，难以控制模型的收敛
-    loss_e = 0
-    num_loss = 0
-    if args.use_video:  
-        loss_e = loss_e - F.mse_loss(v_emd[:, :v_dim], v_emd[:, v_dim:])   # F.mse_loss(v_emd[:, :v_dim], v_emd[:, v_dim:])计算的是模态专有特征和模态共享特征之间的距离，希望这个距离越大越好
-        num_loss = num_loss + 1
-    if args.use_audio:
-        loss_e = loss_e - F.mse_loss(audio_emd[:, :a_dim], audio_emd[:, a_dim:])
-        num_loss = num_loss + 1
-    if args.use_flow:
-        loss_e = loss_e - F.mse_loss(f_emd[:, :f_dim], f_emd[:, f_dim:])
-        num_loss = num_loss + 1
-    wandb.log({"distance loss": (loss_e/num_loss).item()})
-    loss = loss + args.explore_loss_coeff * loss_e/num_loss
+    # loss_e = 0
+    # num_loss = 0
+    # if args.use_video:  
+    #     loss_e = loss_e - F.mse_loss(v_emd[:, :v_dim], v_emd[:, v_dim:])   # F.mse_loss(v_emd[:, :v_dim], v_emd[:, v_dim:])计算的是模态专有特征和模态共享特征之间的距离，希望这个距离越大越好
+    #     num_loss = num_loss + 1
+    # if args.use_audio:
+    #     loss_e = loss_e - F.mse_loss(audio_emd[:, :a_dim], audio_emd[:, a_dim:])
+    #     num_loss = num_loss + 1
+    # if args.use_flow:
+    #     loss_e = loss_e - F.mse_loss(f_emd[:, :f_dim], f_emd[:, f_dim:])
+    #     num_loss = num_loss + 1
+    # wandb.log({"distance loss": (loss_e/num_loss).item()})
+    # loss = loss + args.explore_loss_coeff * loss_e/num_loss
 
 
     # 使用互信息计算模态内部专有特征的损失
-    # v_specific = v_emd[:, v_dim:]
-    # a_specific = audio_emd[:, a_dim:]
-    # f_specific = f_emd[:, f_dim:]
-    # v_specific_proj = v_specific_proj_head(v_specific)
-    # a_specific_proj = a_specific_proj_head(a_specific)
-    # f_specific_proj = f_specific_proj_head(f_specific)
-    # # intra_modal_mi_loss = (compute_mutual_info(v_shared_emd_proj, v_specific_proj) +\
-    # #                     compute_mutual_info(a_shared_emd_proj, a_specific_proj) +\
-    # #                     compute_mutual_info(f_shared_emd_proj, f_specific_proj)) / 3
-    # intra_modal_mi_loss = (compute_mutual_info_improved(v_shared_emd_proj, v_specific_proj,labels) +\
-    #                     compute_mutual_info_improved(a_shared_emd_proj, a_specific_proj,labels) +\
-    #                     compute_mutual_info_improved(f_shared_emd_proj, f_specific_proj,labels)) / 3
-    # # 当共享特征与专有特征特征越不相似，返回值越大.我们希望这个损失越来越大，因此，用减号
-    # loss = loss - 0.5 * intra_modal_mi_loss
-    # wandb.log({"intra_modal_mi_loss": -intra_modal_mi_loss.item()})
+    v_specific = v_emd[:, v_dim:]
+    a_specific = audio_emd[:, a_dim:]
+    f_specific = f_emd[:, f_dim:]
+    v_specific_proj = v_specific_proj_head(v_specific)
+    a_specific_proj = a_specific_proj_head(a_specific)
+    f_specific_proj = f_specific_proj_head(f_specific)
+    # intra_modal_mi_loss = (compute_mutual_info(v_shared_emd_proj, v_specific_proj) +\
+    #                     compute_mutual_info(a_shared_emd_proj, a_specific_proj) +\
+    #                     compute_mutual_info(f_shared_emd_proj, f_specific_proj)) / 3
+    intra_modal_mi_loss = (compute_mutual_info_improved(v_shared_emd_proj, v_specific_proj,labels) +\
+                        compute_mutual_info_improved(a_shared_emd_proj, a_specific_proj,labels) +\
+                        compute_mutual_info_improved(f_shared_emd_proj, f_specific_proj,labels)) / 3
+    # 当共享特征与专有特征特征越不相似，返回值越大.我们希望这个损失越来越大，因此，用减号
+    loss = loss - 0.5 * intra_modal_mi_loss
+    wandb.log({"intra_modal_mi_loss": -intra_modal_mi_loss.item()})
 
     optim.zero_grad()
     loss.backward()
     # 添加梯度裁剪，防止梯度爆炸
     # torch.nn.utils.clip_grad_norm_(params, max_norm=10.0)
     optim.step()
+    # 更新学习率，不知对性能会有什么影响，需要进一步测试
+    # scheduler.step()
     return predict, loss
 
 def validate_one_step(clip, labels, flow, spectrogram):
@@ -434,7 +436,7 @@ if __name__ == '__main__':
         # 这里各设置为一半，是否可以门控网络进行调整？即通过学习进行加权
         # 将不同模态统一到out_dim的维度上
         v_shared_proj_head = ProjectHead(input_dim=1152, hidden_dim=args.hidden_dim, out_dim=args.out_dim).cuda()  # 进行对比损失时用到，可以看到作者在这里涉及了三种分类头
-        # v_specific_proj_head = ProjectHead(input_dim=1152, hidden_dim=args.hidden_dim, out_dim=args.out_dim).cuda()
+        v_specific_proj_head = ProjectHead(input_dim=1152, hidden_dim=args.hidden_dim, out_dim=args.out_dim).cuda()
         input_dim = input_dim + 2304
 
     if args.use_flow:
@@ -444,7 +446,7 @@ if __name__ == '__main__':
         model_flow = torch.nn.DataParallel(model_flow)
 
         f_shared_proj_head = ProjectHead(input_dim=1024, hidden_dim=args.hidden_dim, out_dim=args.out_dim).cuda()
-        # f_specific_proj_head = ProjectHead(input_dim=1024, hidden_dim=args.hidden_dim, out_dim=args.out_dim).cuda()
+        f_specific_proj_head = ProjectHead(input_dim=1024, hidden_dim=args.hidden_dim, out_dim=args.out_dim).cuda()
         input_dim = input_dim + 2048
 
     if args.use_audio:
@@ -465,7 +467,7 @@ if __name__ == '__main__':
         audio_cls_model = audio_cls_model.cuda()
 
         a_shared_proj_head = ProjectHead(input_dim=256, hidden_dim=args.hidden_dim, out_dim=args.out_dim).cuda()
-        # a_specific_proj_head = ProjectHead(input_dim=256, hidden_dim=args.hidden_dim, out_dim=args.out_dim).cuda()
+        a_specific_proj_head = ProjectHead(input_dim=256, hidden_dim=args.hidden_dim, out_dim=args.out_dim).cuda()
         input_dim = input_dim + 512
     # 分类器，输入维度为所有隐藏层（含模态共享、模态专有维度）
     # The EPIC-Kitchens dataset includes eight actions (‘put’,‘take’, ‘open’, ‘close’, ‘wash’, ‘cut’, ‘mix’, and ‘pour’)
@@ -548,15 +550,15 @@ if __name__ == '__main__':
         # Fast路径：捕获运动信息
         params = params + list(model.module.backbone.fast_path.layer4.parameters()) + list(
         model.module.backbone.slow_path.layer4.parameters()) + list(model.module.cls_head.parameters()) + list(v_shared_proj_head.parameters())
-        # params = params + list(v_specific_proj_head.parameters())
+        params = params + list(v_specific_proj_head.parameters())
     if args.use_flow:
         # SlowOnly是SlowFast网络的一个变体，只保留了Slow路径。
         # 它专门设计用于处理光流输入，因为光流本身已经包含了运动信息
         params = params + list(model_flow.module.backbone.layer4.parameters()) +list(model_flow.module.cls_head.parameters()) + list(f_shared_proj_head.parameters())
-        # params = params + list(f_specific_proj_head.parameters())
+        params = params + list(f_specific_proj_head.parameters())
     if args.use_audio:
         params = params + list(audio_cls_model.parameters()) + list(a_shared_proj_head.parameters())
-        # params = params + list(a_specific_proj_head.parameters())
+        params = params + list(a_specific_proj_head.parameters())
     
     if args.use_video and args.use_flow and args.use_audio:
         params = params + list(mlp_v2a.parameters())+list(mlp_a2v.parameters())
@@ -570,12 +572,57 @@ if __name__ == '__main__':
         params = params + list(mlp_f2a.parameters())+list(mlp_a2f.parameters())
 
     optim = torch.optim.Adam(params, lr=args.lr, weight_decay=1e-4)
+    # 当前项目中未采用学习率调整策略，可以考虑添加
+    # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optim, T_max=args.nepochs)
     
     BestLoss = float("inf")
     BestEpoch = args.BestEpoch
     BestAcc = args.BestAcc
     BestTestAcc = args.BestTestAcc
 
+    # if args.resumef:
+    #     resume_file = base_path_model + log_name + '.pt'
+    #     print("Resuming from ", resume_file)
+    #     checkpoint = torch.load(resume_file)
+    #     starting_epoch = checkpoint['epoch']+1
+    
+    #     BestLoss = checkpoint['BestLoss']
+    #     BestEpoch = checkpoint['BestEpoch']
+    #     BestAcc = checkpoint['BestAcc']
+    #     BestTestAcc = checkpoint['BestTestAcc']
+
+    #     if args.use_video:
+    #         model.load_state_dict(checkpoint['model_state_dict'])
+    #         v_shared_proj_head.load_state_dict(checkpoint['v_proj_state_dict'])
+    #     if args.use_flow:
+    #         model_flow.load_state_dict(checkpoint['model_flow_state_dict'])
+    #         f_shared_proj_head.load_state_dict(checkpoint['f_proj_state_dict'])
+    #     if args.use_audio:
+    #         audio_model.load_state_dict(checkpoint['audio_model_state_dict'])
+    #         audio_cls_model.load_state_dict(checkpoint['audio_cls_model_state_dict'])
+    #         a_shared_proj_head.load_state_dict(checkpoint['a_proj_state_dict'])
+    #     optim.load_state_dict(checkpoint['optimizer'])
+    #     if args.use_video and args.use_flow and args.use_audio:
+    #         mlp_v2a.load_state_dict(checkpoint['mlp_v2a_state_dict'])
+    #         mlp_a2v.load_state_dict(checkpoint['mlp_a2v_state_dict'])
+    #         mlp_v2f.load_state_dict(checkpoint['mlp_v2f_state_dict'])
+    #         mlp_f2v.load_state_dict(checkpoint['mlp_f2v_state_dict'])
+    #         mlp_f2a.load_state_dict(checkpoint['mlp_f2a_state_dict'])
+    #         mlp_a2f.load_state_dict(checkpoint['mlp_a2f_state_dict'])
+    #     elif args.use_video and args.use_flow:
+    #         mlp_v2f.load_state_dict(checkpoint['mlp_v2f_state_dict'])
+    #         mlp_f2v.load_state_dict(checkpoint['mlp_f2v_state_dict'])
+    #     elif args.use_video and args.use_audio:
+    #         mlp_v2a.load_state_dict(checkpoint['mlp_v2a_state_dict'])
+    #         mlp_a2v.load_state_dict(checkpoint['mlp_a2v_state_dict'])
+    #     elif args.use_flow and args.use_audio:
+    #         mlp_f2a.load_state_dict(checkpoint['mlp_f2a_state_dict'])
+    #         mlp_a2f.load_state_dict(checkpoint['mlp_a2f_state_dict'])
+    #     mlp_cls.load_state_dict(checkpoint['mlp_cls_state_dict'])
+    # else:
+    #     print("Training From Scratch ..." )
+    #     starting_epoch = 0
+ 
     starting_epoch = 0
     print("starting_epoch: ", starting_epoch)
 
@@ -604,15 +651,15 @@ if __name__ == '__main__':
                 if args.use_video:
                     model.train(split == 'train')
                     v_shared_proj_head.train(split == 'train')
-                    # v_specific_proj_head.train(split == 'train')
+                    v_specific_proj_head.train(split == 'train')
                 if args.use_flow:
                     model_flow.train(split == 'train')
                     f_shared_proj_head.train(split == 'train')
-                    # f_specific_proj_head.train(split == 'train')
+                    f_specific_proj_head.train(split == 'train')
                 if args.use_audio:
                     audio_cls_model.train(split == 'train')
                     a_shared_proj_head.train(split == 'train')
-                    # a_specific_proj_head.train(split == 'train')
+                    a_specific_proj_head.train(split == 'train')
                 if args.use_video and args.use_flow and args.use_audio:
                     mlp_v2a.train(split == 'train')
                     mlp_a2v.train(split == 'train')
